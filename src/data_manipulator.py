@@ -191,7 +191,12 @@ def encode_class(df: pd.DataFrame) -> pd.DataFrame:
         return result_df
 
     # Zastosuj one-hot encoding
-    encoder = OneHotEncoder(sparse=False)
+    try:
+        # Dla nowszych wersji scikit-learn (1.0+)
+        encoder = OneHotEncoder(sparse_output=False)
+    except TypeError:
+        # Dla starszych wersji scikit-learn (<1.0)
+        encoder = OneHotEncoder(sparse=False)
     encoded = encoder.fit_transform(result_df[['Class']])
 
     # Stwórz DataFrame z zakodowanymi danymi
