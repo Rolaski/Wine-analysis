@@ -57,27 +57,17 @@ class ClassificationModel:
         if params is None:
             params = {}
 
-        if self.model_type == 'knn':
-            n_neighbors = params.get('n_neighbors', 5)
-            weights = params.get('weights', 'uniform')
-            return KNeighborsClassifier(n_neighbors=n_neighbors, weights=weights)
+        # Obsługa różnych wariantów nazw dla K-Means
+        if self.model_type.lower().replace('-', '') in ['kmeans', 'kmeans']:
+            n_clusters = params.get('n_clusters', 3)
+            self.n_clusters = n_clusters
+            return KMeans(n_clusters=n_clusters, random_state=42)
 
-        elif self.model_type == 'svm':
-            C = params.get('C', 1.0)
-            kernel = params.get('kernel', 'rbf')
-            gamma = params.get('gamma', 'scale')
-            return SVC(C=C, kernel=kernel, gamma=gamma, probability=True)
-
-        elif self.model_type == 'rf':
-            n_estimators = params.get('n_estimators', 100)
-            max_depth = params.get('max_depth', None)
-            min_samples_split = params.get('min_samples_split', 2)
-            return RandomForestClassifier(
-                n_estimators=n_estimators,
-                max_depth=max_depth,
-                min_samples_split=min_samples_split,
-                random_state=42
-            )
+        # Obsługa różnych wariantów nazw dla DBSCAN
+        elif self.model_type.lower().replace('-', '') in ['dbscan']:
+            eps = params.get('eps', 0.5)
+            min_samples = params.get('min_samples', 5)
+            return DBSCAN(eps=eps, min_samples=min_samples)
 
         else:
             raise ValueError(f"Nieznany typ modelu: {self.model_type}")
@@ -302,7 +292,9 @@ class ClusteringModel:
         if params is None:
             params = {}
 
-        if self.model_type == 'kmeans':
+        # Obsługa różnych wariantów nazw dla K-Means
+        model_type_normalized = self.model_type.lower().replace('-', '').replace(' ', '')
+        if 'kmeans' in model_type_normalized or 'k-means' in self.model_type.lower():
             n_clusters = params.get('n_clusters', 3)
             self.n_clusters = n_clusters
             return KMeans(n_clusters=n_clusters, random_state=42)
