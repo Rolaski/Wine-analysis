@@ -85,6 +85,33 @@ def page_data_overview():
         st.metric("Brakujące wartości", info["brakujące_wartości"])
         st.metric("Duplikaty", info["duplikaty"])
 
+    # Opis kolumn
+    st.subheader("Opis kolumn w zbiorze danych")
+
+    col_descriptions = {
+        "Class": "Klasa wina (1, 2, 3) - odpowiada trzem różnym odmianom winogron/pochodzeniu",
+        "Alcohol": "Zawartość alkoholu",
+        "Malic acid": "Zawartość kwasu jabłkowego",
+        "Ash": "Zawartość popiołu (minerałów nieorganicznych)",
+        "Alcalinity of ash": "Alkaliczność popiołu",
+        "Magnesium": "Zawartość magnezu",
+        "Total phenols": "Całkowita zawartość fenoli",
+        "Flavanoids": "Zawartość flawonoidów",
+        "Nonflavanoid phenols": "Zawartość fenoli niebędących flawonoidami",
+        "Proanthocyanins": "Zawartość proantocyjanidyn",
+        "Color intensity": "Intensywność koloru",
+        "Hue": "Odcień",
+        "OD280/OD315 of diluted wines": "Stosunek absorbancji w długościach fal 280nm do 315nm (miara białek)",
+        "Proline": "Zawartość proliny (aminokwasu)"
+    }
+
+    # Utwórz DataFrame z opisami kolumn do ładniejszego wyświetlenia
+    desc_df = pd.DataFrame({
+        "Kolumna": col_descriptions.keys(),
+        "Opis": col_descriptions.values()
+    })
+
+    st.dataframe(desc_df, use_container_width=True)
     # Rozkład klas
     st.subheader("Rozkład klas")
     fig = create_class_distribution(st.session_state.data)
@@ -602,10 +629,11 @@ def page_visualization():
         # Wybierz kolumny
         max_cols = st.slider("Maksymalna liczba kolumn:", 2, 8, 5)
 
+        available_cols = [col for col in numeric_cols if col != 'Class']
         selected_columns = st.multiselect(
             "Wybierz kolumny:",
-            numeric_cols,
-            default=numeric_cols[:max_cols] if len(numeric_cols) >= max_cols else numeric_cols
+            available_cols,
+            default=available_cols[:max_cols] if len(available_cols) >= max_cols else available_cols
         )
 
         # Wybierz kolumnę do kolorowania
@@ -637,12 +665,12 @@ def page_visualization():
         # Wybierz kolumny
         max_cols = st.slider("Maksymalna liczba kolumn:", 2, 10, 6)
 
+        available_cols = [col for col in numeric_cols if col != 'Class']
         selected_columns = st.multiselect(
             "Wybierz kolumny:",
-            numeric_cols,
-            default=numeric_cols[:max_cols] if len(numeric_cols) >= max_cols else numeric_cols
+            available_cols,
+            default=available_cols[:max_cols] if len(available_cols) >= max_cols else available_cols
         )
-
         # Wybierz kolumnę klasy
         class_column = st.selectbox(
             "Kolumna klasy:",
@@ -679,6 +707,7 @@ def page_ml_modeling():
     # Wybierz typ modelowania
     st.subheader("Wybierz typ modelowania")
 
+
     model_category = st.selectbox(
         "Kategoria modelu:",
         ["Klasyfikacja", "Klastrowanie", "Reguły asocjacyjne"]
@@ -701,7 +730,12 @@ def page_ml_modeling():
         )
 
         # Mapowanie wyświetlanej nazwy na kod
-        model_code = model_type.split("(")[1].split(")")[0]
+        model_code = model_type.lower().replace('-', '')
+        # Inicjalizacja modelu - zapewniamy konkretną wartość 'kmeans' dla K-Means
+        if 'kmeans' in model_code.lower().replace('-', ''):
+            model = ClusteringModel('kmeans')
+        else:
+            model = ClusteringModel(model_code)
 
         # Parametry modelu
         st.subheader("Parametry modelu")
