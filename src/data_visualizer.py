@@ -305,30 +305,52 @@ def create_class_distribution(df: pd.DataFrame) -> Figure:
     Returns:
         Obiekt Figure z wykresem
     """
-    if df is None or 'Class' not in df.columns:
+    if df is None:
         fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, "Brak danych o klasach",
+        ax.text(0.5, 0.5, "Brak danych",
                 horizontalalignment='center', verticalalignment='center')
         return fig
 
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Policz wystąpienia każdej klasy
-    class_counts = df['Class'].value_counts().sort_index()
+    # Sprawdź czy kolumna 'Class' istnieje
+    if 'Class' in df.columns:
+        # Policz wystąpienia każdej klasy
+        class_counts = df['Class'].value_counts().sort_index()
 
-    # Stwórz wykres
-    ax.bar(class_counts.index.astype(str), class_counts.values)
+        # Stwórz wykres
+        ax.bar(class_counts.index.astype(str), class_counts.values)
 
-    plt.title('Rozkład klas')
-    plt.xlabel('Klasa')
-    plt.ylabel('Liczba próbek')
+        plt.title('Rozkład klas')
+        plt.xlabel('Klasa')
+        plt.ylabel('Liczba próbek')
 
-    # Dodaj etykiety z liczbą próbek
-    for i, v in enumerate(class_counts.values):
-        ax.text(i, v + 5, str(v), ha='center')
+        # Dodaj etykiety z liczbą próbek
+        for i, v in enumerate(class_counts.values):
+            ax.text(i, v + 5, str(v), ha='center')
+    else:
+        # Sprawdź czy istnieją zakodowane kolumny klas (po one-hot encoding)
+        class_columns = [col for col in df.columns if col.startswith('Class_')]
+
+        if class_columns:
+            # Policz sumę dla każdej zakodowanej kolumny klasy
+            class_counts = {col.split('_')[1]: df[col].sum() for col in sorted(class_columns)}
+
+            # Stwórz wykres
+            ax.bar(class_counts.keys(), class_counts.values())
+
+            plt.title('Rozkład klas (po kodowaniu binarnym)')
+            plt.xlabel('Klasa')
+            plt.ylabel('Liczba próbek')
+
+            # Dodaj etykiety z liczbą próbek
+            for i, (k, v) in enumerate(class_counts.items()):
+                ax.text(i, v + 5, str(int(v)), ha='center')
+        else:
+            ax.text(0.5, 0.5, "Brak danych o klasach",
+                    horizontalalignment='center', verticalalignment='center')
 
     plt.tight_layout()
-
     return fig
 
 
