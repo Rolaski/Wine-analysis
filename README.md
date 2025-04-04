@@ -1,121 +1,120 @@
 # Wine Dataset Analysis
 
-Interaktywna aplikacja do analizy i eksploracji zbioru danych Wine Dataset z UCI z wykorzystaniem Pythona i bibliotek do analizy danych (Pandas, NumPy, Scikit-learn, Matplotlib, Seaborn, Streamlit).
+Interactive application for analyzing and exploring the Wine Dataset from UCI using Python and data analysis libraries (Pandas, NumPy, Scikit-learn, Matplotlib, Seaborn, Streamlit).
 
-## Opis projektu
+## Project description
 
-Aplikacja umożliwia:
-- Odczyt i analizę danych z pliku CSV
-- Wykonanie analizy statystycznej (min, max, mediana, moda, odchylenie standardowe itp.)
-- Wyznaczanie korelacji między cechami
-- Ekstrakcję podtablic i manipulację danymi
-- Wizualizację danych (wykresy zależności, histogramy, wykresy korelacji)
-- Przeprowadzenie analizy z wykorzystaniem modeli klasyfikacji, grupowania i reguł asocjacyjnych
-- Interaktywną analizę danych poprzez GUI
+The application allows:
+- Reading and analyzing data from a CSV file
+- Performing statistical analysis (min, max, median, mode, standard deviation, etc.)
+- Determining correlations between features
+- Extracting subtables and manipulating data
+- Visualizing data (dependency graphs, histograms, correlation graphs)
+- Performing analysis using classification models, grouping and association rules
+- Interactive data analysis via GUI
 
-## Struktura projektu
+## Project structure
 
 ```
 wine_analysis_app/
 │
 ├── data/
-│   ├── wine.data
-│   ├── wine.names
-│   └── index
+│ ├── wine.data
+│ ├── wine.names
+│ └── index
 │
 ├── src/
-│   ├── __init__.py
-│   ├── data_loader.py        # Moduł do wczytywania danych
-│   ├── data_manipulator.py   # Moduł do manipulacji danymi
-│   ├── statistical_analyzer.py # Moduł do analizy statystycznej
-│   ├── data_visualizer.py    # Moduł do wizualizacji
-│   ├── ml_modeler.py         # Moduł do modelowania ML
-│   └── utils.py              # Funkcje pomocnicze
-│
-├── models/                   # Katalog do zapisywania wytrenowanych modeli
+│ ├── __init__.py
+│ ├── data_loader.py # Data loading module
+│ ├── data_manipulator.py # Data manipulation module
+│ ├── statistical_analyzer.py # Statistical analysis module
+│ ├── data_visualizer.py # Visualization module
+│ ├── ml_modeler.py # ML modeling module
+│ └── utils.py # Helper functions
 │
 ├── requirements.txt
 ├── README.md
-└── app.py                    # Główna aplikacja Streamlit
+└── app.py # Main Streamlit application
 ```
 
-## Wymagania
+## Requirements
 
 - Python 3.8+
-- Biblioteki wyszczególnione w pliku `requirements.txt`
+- Libraries listed in `requirements.txt` file
 
-## Instalacja
+## Installation
 
-1. Sklonuj repozytorium:
+1. Clone the repository:
 ```
-git clone https://github.com/user/wine_analysis_app.git
+git clone https://github.com/Rolaski/Wine-analysis.git
 cd wine_analysis_app
 ```
 
-2. Utwórz i aktywuj wirtualne środowisko (opcjonalnie):
+2. Create and activate a virtual environment (optional):
 ```
 python -m venv venv
-# W systemie Windows
+# On Windows
 venv\Scripts\activate
-# W systemie Unix/MacOS
+# On Unix/MacOS
 source venv/bin/activate
 ```
 
-3. Zainstaluj wymagane biblioteki:
+3. Install the required libraries:
 ```
 pip install -r requirements.txt
 ```
 
-4. Przygotuj dane:
-   - Pobierz zbiór danych Wine Dataset z UCI Machine Learning Repository
-   - Umieść pliki `wine.data`, `wine.names` i `Index` w katalogu `data/`
+4. Prepare the data:
+- Download the Wine Dataset from the UCI Machine Learning Repository
+- Place the `wine.data`, `wine.names` and `Index` files in the `data/` directory
 
-## Uruchomienie aplikacji
+## Running the application
 
-Aby uruchomić aplikację, wykonaj poniższą komendę w głównym katalogu projektu:
+To run the application, execute the following command in the root directory project:
 
 ```
 streamlit run app.py
 ```
 
-Aplikacja będzie dostępna w przeglądarce pod adresem `http://localhost:8501`.
+The application will be available in the browser at `http://localhost:8501`.
 
-## Funkcjonalności
+## Features
 
-### Przegląd danych
-- Wyświetlanie podstawowych informacji o zbiorze danych
-- Podgląd próbki danych
-- Statystyki opisowe
-- Rozkład klas
+### Data Overview
+- Viewing Basic Dataset Information
+- Viewing a Data Sample
+- Descriptive Statistics
+- Class Distribution
 
-### Analiza statystyczna
-- Obliczanie podstawowych miar statystycznych
-- Badanie korelacji między cechami
-- Identyfikacja wartości odstających
-- Testy statystyczne
+### Statistical Analysis
+- Calculating Basic Statistical Measures
+- Examining Correlations Between Features
+- Identifying Outliers
+- Statistical Tests
 
-### Manipulacja danymi
-- Selekcja cech i wierszy
-- Zastępowanie wartości
-- Obsługa brakujących danych
-- Skalowanie i standaryzacja
-- Kodowanie binarne
+### Data Manipulation
+- Selecting Features and Rows
+- Replacing Values
+- Handling Missing Data
+- Scaling and Standardization
+- Binary Encoding
 
-### Wizualizacja
-- Histogramy
-- Wykresy pudełkowe
-- Wykresy rozproszenia (2D i 3D)
-- Macierze korelacji
-- Wykresy par cech
-- Wykresy współrzędnych równoległych
+### Visualization
+- Histograms
+- Box Plots
+- Scatter Plots (2D and 3D)
+- Correlation Matrices
+- Feature Pair Plots
+- Parallel Coordinate Plots
 
-### Modelowanie ML
-- Klasyfikacja (KNN, SVM, Random Forest)
-- Klastrowanie (K-Means, DBSCAN)
-- Reguły asocjacyjne (Apriori)
-- Wizualizacja wyników
-- Wybór i optymalizacja parametrów modeli
+### ML Modeling
+- Classification (KNN, SVM, Random Forest)
+- Clustering (K-Means, DBSCAN)
+- Association Rules (Apriori)
+- Results visualization
+- Model parameter selection and optimization
 
-## Autorzy
+## Authors
 
-Projekt stworzony jako zadanie uczenia maszynowego, oparty na zbiorze danych Wine Dataset z UCI Machine Learning Repository.
+- [Jakub Jakubowski](https://github.com/Rolaski)
+- [Kacper Bułaś](https://github.com/bolson1313)
