@@ -67,11 +67,23 @@ def get_dataset_info(df: pd.DataFrame) -> dict:
         "liczba_kolumn": df.shape[1],
         "nazwy_kolumn": df.columns.tolist(),
         "typy_danych": df.dtypes.to_dict(),
-        "liczba_klas": df['Class'].nunique(),
-        "rozkład_klas": df['Class'].value_counts().to_dict(),
         "brakujące_wartości": df.isnull().sum().sum(),
         "duplikaty": df.duplicated().sum()
     }
+
+    # Dodaj informacje o klasach tylko jeśli kolumna 'Class' istnieje
+    if 'Class' in df.columns:
+        info["liczba_klas"] = df['Class'].nunique()
+        info["rozkład_klas"] = df['Class'].value_counts().to_dict()
+    else:
+        # Sprawdź, czy istnieją kolumny typu Class_1, Class_2, itp.
+        class_columns = [col for col in df.columns if col.startswith('Class_')]
+        if class_columns:
+            info["liczba_klas"] = len(class_columns)
+            info["rozkład_klas"] = {i + 1: df[col].sum() for i, col in enumerate(sorted(class_columns))}
+        else:
+            info["liczba_klas"] = 0
+            info["rozkład_klas"] = {}
 
     return info
 
