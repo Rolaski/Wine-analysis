@@ -11,6 +11,7 @@ from typing import Tuple
 def load_wine_dataset(data_path: str = "../data/wine.data") -> pd.DataFrame:
     """
     Wczytuje zbiór danych Wine Dataset i dodaje odpowiednie nagłówki.
+    Wywoływana na początku aplikacji.
 
     Args:
         data_path: Ścieżka do pliku z danymi
@@ -52,6 +53,7 @@ def load_wine_dataset(data_path: str = "../data/wine.data") -> pd.DataFrame:
 def get_dataset_info(df: pd.DataFrame) -> dict:
     """
     Zwraca podstawowe informacje o zbiorze danych.
+    Wykorzystywany w sekcji -> informacje o zbiorze danych.
 
     Args:
         df: DataFrame z danymi
@@ -91,6 +93,9 @@ def get_dataset_info(df: pd.DataFrame) -> dict:
 def split_features_target(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
     """
     Dzieli zbiór danych na cechy (features) i cel (target).
+    W ten sposób rozdzielamy wszystkie kolumny otrzymując:
+    X - dane wejściowe
+    y - klasę którą model przewiduje
 
     Args:
         df: DataFrame z danymi
