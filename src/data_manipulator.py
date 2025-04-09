@@ -12,6 +12,7 @@ from typing import Union, List, Tuple, Optional
 def select_features(df: pd.DataFrame, features: List[str]) -> pd.DataFrame:
     """
     Wybiera podane kolumny z DataFrame.
+    Wykorzystywana jest do wybierania cech
 
     Args:
         df: DataFrame z danymi
@@ -173,6 +174,7 @@ def scale_data(df: pd.DataFrame, method: str = 'standard',
 def encode_class(df: pd.DataFrame) -> pd.DataFrame:
     """
     Koduje kolumnę Class do formatu one-hot encoding.
+    Przerabia ja na format binarny zeby algorytmy uczenia maszynowego ogarniały temat.
 
     Args:
         df: DataFrame z danymi
@@ -192,10 +194,10 @@ def encode_class(df: pd.DataFrame) -> pd.DataFrame:
 
     # Zastosuj one-hot encoding
     try:
-        # Dla nowszych wersji scikit-learn (1.0+)
+        # Dla nowszych wersji scikit-learn
         encoder = OneHotEncoder(sparse_output=False)
     except TypeError:
-        # Dla starszych wersji scikit-learn (<1.0)
+        # Dla starszych wersji scikit-learn
         encoder = OneHotEncoder(sparse=False)
     encoded = encoder.fit_transform(result_df[['Class']])
 

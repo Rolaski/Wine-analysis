@@ -9,11 +9,7 @@ from typing import Dict, List, Tuple, Optional, Union, Any
 # Importy dla klasyfikacji
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-from sklearn.pipeline import Pipeline
 
 # Importy dla klastrowania
 from sklearn.cluster import KMeans, DBSCAN
@@ -26,6 +22,7 @@ from mlxtend.frequent_patterns import apriori, association_rules
 class ClassificationModel:
     """
     Klasa do modelowania klasyfikacji dla zbioru danych Wine.
+    Obsługuje modele KNN, SVM, Random Forest.
     """
 
     def __init__(self, model_type: str = 'rf'):
@@ -263,6 +260,7 @@ class ClassificationModel:
 class ClusteringModel:
     """
     Klasa do modelowania klastrowania dla zbioru danych Wine.
+    Obsługuje modele K-means, DBSCAN
     """
 
     def __init__(self, model_type: str = 'kmeans'):

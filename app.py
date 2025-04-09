@@ -65,13 +65,13 @@ page = st.sidebar.radio(
     ["Przegląd danych", "Analiza statystyczna", "Manipulacja danymi", "Wizualizacja", "Modelowanie ML"]
 )
 
-
-# Funkcje dla poszczególnych stron
 def page_data_overview():
+    """ Strona przeglądu danych"""
     st.header("Przegląd danych Wine Dataset")
 
     # Informacje o zbiorze danych
     st.subheader("Informacje o zbiorze danych")
+    st.markdown("[Link do datasetu](https://archive.ics.uci.edu/dataset/109/wine)")
     info = get_dataset_info(st.session_state.data)
 
     col1, col2 = st.columns(2)
@@ -105,7 +105,7 @@ def page_data_overview():
         "Proline": "Zawartość proliny (aminokwasu)"
     }
 
-    # Utwórz DataFrame z opisami kolumn do ładniejszego wyświetlenia
+    # DataFrame z opisami kolumn do ładniejszego wyświetlenia
     desc_df = pd.DataFrame({
         "Kolumna": col_descriptions.keys(),
         "Opis": col_descriptions.values()
@@ -137,9 +137,10 @@ def page_data_overview():
 
 
 def page_statistical_analysis():
+    """ Strona analizy statystycznej """
     st.header("Analiza statystyczna")
 
-    # Importuj moduły potrzebne do analizy statystycznej
+    # Import modułów potrzebne do analizy statystycznej
     from src.statistical_analyzer import (
         calculate_basic_stats, calculate_quartiles, calculate_correlation_matrix,
         find_highly_correlated_features, calculate_class_stats, test_normality,
@@ -280,9 +281,10 @@ def page_statistical_analysis():
 
 
 def page_data_manipulation():
+    """ Strona manipulacji - zarzadzania danymi"""
     st.header("Manipulacja danymi")
 
-    # Importuj moduły do manipulacji danymi
+    # Import modułów do manipulacji danymi
     from src.data_manipulator import (
         select_features, select_rows_by_class, replace_values,
         handle_missing_values, remove_duplicates, scale_data,
@@ -497,6 +499,7 @@ def page_data_manipulation():
 
 
 def page_visualization():
+    """ Strona do wizualizacji danych """
     st.header("Wizualizacja danych")
 
     # Importy potrzebne dla wizualizacji
@@ -698,6 +701,7 @@ def page_visualization():
 
 
 def page_ml_modeling():
+    """ Strona modelowania za pomoca machine learning"""
     st.header("Modelowanie uczenia maszynowego")
 
     # Importy potrzebne dla modelowania ML
