@@ -1,3 +1,5 @@
 /.venv/
+venv/*
 /.idea/
 /src/__pycache__
+/wine-analysis-desktop/
