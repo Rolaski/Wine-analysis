@@ -11,6 +11,11 @@ from sklearn.model_selection import train_test_split, cross_val_score, GridSearc
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
+# Importy dla konkretnych modeli klasyfikacji
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.ensemble import RandomForestClassifier
+
 # Importy dla klastrowania
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import silhouette_score
@@ -54,17 +59,27 @@ class ClassificationModel:
         if params is None:
             params = {}
 
-        # Obsługa różnych wariantów nazw dla K-Means
-        if self.model_type.lower().replace('-', '') in ['kmeans', 'kmeans']:
-            n_clusters = params.get('n_clusters', 3)
-            self.n_clusters = n_clusters
-            return KMeans(n_clusters=n_clusters, random_state=42)
+        if self.model_type == 'rf':
+            n_estimators = params.get('n_estimators', 100)
+            max_depth = params.get('max_depth', None)
+            min_samples_split = params.get('min_samples_split', 2)
+            return RandomForestClassifier(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                min_samples_split=min_samples_split,
+                random_state=42
+            )
 
-        # Obsługa różnych wariantów nazw dla DBSCAN
-        elif self.model_type.lower().replace('-', '') in ['dbscan']:
-            eps = params.get('eps', 0.5)
-            min_samples = params.get('min_samples', 5)
-            return DBSCAN(eps=eps, min_samples=min_samples)
+        elif self.model_type == 'knn':
+            n_neighbors = params.get('n_neighbors', 5)
+            weights = params.get('weights', 'uniform')
+            return KNeighborsClassifier(n_neighbors=n_neighbors, weights=weights)
+
+        elif self.model_type == 'svm':
+            C = params.get('C', 1.0)
+            kernel = params.get('kernel', 'rbf')
+            gamma = params.get('gamma', 'scale')
+            return SVC(C=C, kernel=kernel, gamma=gamma, probability=True)
 
         else:
             raise ValueError(f"Nieznany typ modelu: {self.model_type}")
