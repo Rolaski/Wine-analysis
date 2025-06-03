@@ -1,5 +1,6 @@
 """
 Moduł odpowiedzialny za modelowanie uczenia maszynowego.
+Rozszerzony o metody cross-validation zgodnie z wymaganiami prowadzącego.
 """
 
 import pandas as pd
@@ -7,7 +8,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, Union, Any
 
 # Importy dla klasyfikacji
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold, LeaveOneOut
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
@@ -28,6 +29,7 @@ class ClassificationModel:
     """
     Klasa do modelowania klasyfikacji dla zbioru danych Wine.
     Obsługuje modele KNN, SVM, Random Forest.
+    Rozszerzona o różne metody ewaluacji (train/test, cross-validation, leave-one-out).
     """
 
     def __init__(self, model_type: str = 'rf'):
@@ -87,7 +89,7 @@ class ClassificationModel:
     def prepare_data(self, X: pd.DataFrame, y: pd.Series,
                      test_size: float = 0.2, random_state: int = 42) -> None:
         """
-        Przygotowuje dane do modelowania.
+        Przygotowuje dane do modelowania (dla train/test split).
 
         Args:
             X: Cechy
@@ -115,7 +117,7 @@ class ClassificationModel:
 
     def train(self, params: Optional[Dict] = None) -> Dict:
         """
-        Trenuje model klasyfikacji.
+        Trenuje model klasyfikacji (dla train/test split).
 
         Args:
             params: Parametry modelu
@@ -146,10 +148,10 @@ class ClassificationModel:
         # Macierz pomyłek
         conf_matrix = confusion_matrix(self.y_test, test_preds).tolist()
 
-        # Walidacja krzyżowa
-        cv_scores = cross_val_score(self.model, pd.concat([self.X_train, self.X_test]),
-                                    pd.concat([self.y_train, self.y_test]),
-                                    cv=5, scoring='accuracy')
+        # Walidacja krzyżowa na pełnym zbiorze
+        X_full = pd.concat([self.X_train, self.X_test])
+        y_full = pd.concat([self.y_train, self.y_test])
+        cv_scores = cross_val_score(self.model, X_full, y_full, cv=5, scoring='accuracy')
 
         results = {
             "model_type": self.model_type,
@@ -159,7 +161,8 @@ class ClassificationModel:
             "cross_val_mean": cv_scores.mean(),
             "cross_val_std": cv_scores.std(),
             "classification_report": report,
-            "confusion_matrix": conf_matrix
+            "confusion_matrix": conf_matrix,
+            "y_test": self.y_test.tolist()
         }
 
         # Dodaj ważność cech, jeśli dostępna
@@ -168,6 +171,97 @@ class ClassificationModel:
                 self.feature_names,
                 self.model.feature_importances_
             ))
+
+        return results
+
+    def cross_validate(self, X: pd.DataFrame, y: pd.Series, params: Optional[Dict] = None,
+                      cv_folds: int = 5, random_state: int = 42) -> Dict:
+        """
+        Przeprowadza walidację krzyżową lub leave-one-out.
+
+        Args:
+            X: Cechy
+            y: Zmienna celu
+            params: Parametry modelu
+            cv_folds: Liczba fałd (jeśli równa liczbie próbek, to LOO)
+            random_state: Ziarno losowości
+
+        Returns:
+            Słownik z wynikami walidacji krzyżowej
+        """
+        self.feature_names = X.columns.tolist()
+
+        # Normalizacja danych
+        X_scaled = pd.DataFrame(
+            self.scaler.fit_transform(X),
+            columns=self.feature_names
+        )
+
+        # Stwórz model
+        self.model = self.create_model(params)
+
+        # Określ strategię walidacji krzyżowej
+        if cv_folds == len(X):
+            # Leave-One-Out
+            cv_strategy = LeaveOneOut()
+            cv_name = "Leave-One-Out"
+        else:
+            # Stratified K-Fold
+            cv_strategy = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=random_state)
+            cv_name = f"{cv_folds}-Fold Cross-Validation"
+
+        # Przeprowadź walidację krzyżową
+        cv_scores = cross_val_score(self.model, X_scaled, y, cv=cv_strategy, scoring='accuracy')
+
+        # Trenuj model na wszystkich danych dla ważności cech
+        self.model.fit(X_scaled, y)
+
+        results = {
+            "model_type": self.model_type,
+            "cv_strategy": cv_name,
+            "cv_folds": cv_folds,
+            "cv_scores": cv_scores.tolist(),
+            "cv_mean": cv_scores.mean(),
+            "cv_std": cv_scores.std(),
+            "cv_min": cv_scores.min(),
+            "cv_max": cv_scores.max()
+        }
+
+        # Dodaj ważność cech, jeśli dostępna
+        if hasattr(self.model, 'feature_importances_'):
+            results["feature_importance"] = dict(zip(
+                self.feature_names,
+                self.model.feature_importances_
+            ))
+
+        # Dla małej liczby fałd, dodaj szczegółowe wyniki
+        if cv_folds <= 20:
+            results["detailed_results"] = []
+
+            fold_idx = 1
+            for train_idx, test_idx in cv_strategy.split(X_scaled, y):
+                X_train_fold = X_scaled.iloc[train_idx]
+                X_test_fold = X_scaled.iloc[test_idx]
+                y_train_fold = y.iloc[train_idx]
+                y_test_fold = y.iloc[test_idx]
+
+                # Trenuj model na fałdzie
+                fold_model = self.create_model(params)
+                fold_model.fit(X_train_fold, y_train_fold)
+
+                # Predykcja
+                fold_pred = fold_model.predict(X_test_fold)
+                fold_accuracy = accuracy_score(y_test_fold, fold_pred)
+
+                results["detailed_results"].append({
+                    "fold": fold_idx,
+                    "train_size": len(train_idx),
+                    "test_size": len(test_idx),
+                    "accuracy": fold_accuracy,
+                    "test_indices": test_idx.tolist()
+                })
+
+                fold_idx += 1
 
         return results
 
@@ -467,8 +561,9 @@ class AssociationRulesMiner:
 
         # Dla każdej kolumny numerycznej
         for col in self.X.select_dtypes(include=np.number).columns:
-            # Konwersja na wartości binarne (0 lub 1) na podstawie progu
-            self.X[col] = (self.X[col] > self.X[col].mean()).astype(int)
+            # Konwersja na wartości binarne (0 lub 1) na podstawie progu percentyla
+            threshold_value = self.X[col].quantile(threshold)
+            self.X[col] = (self.X[col] > threshold_value).astype(int)
 
     def find_frequent_itemsets(self, min_support: float = 0.1) -> pd.DataFrame:
         """
@@ -552,8 +647,8 @@ class AssociationRulesMiner:
             antecedents = list(rule['antecedents'])
             consequents = list(rule['consequents'])
 
-            antecedent_str = ', '.join([f"{col} = 1" for col in antecedents])
-            consequent_str = ', '.join([f"{col} = 1" for col in consequents])
+            antecedent_str = ', '.join([f"{col} = wysoki" for col in antecedents])
+            consequent_str = ', '.join([f"{col} = wysoki" for col in consequents])
 
             rule_str = f"{antecedent_str} => {consequent_str}"
             rule_str += f" [wsparcie={rule['support']:.3f}, pewność={rule['confidence']:.3f}, lift={rule['lift']:.3f}]"
