@@ -6,15 +6,17 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import re
 
 # Import modułów własnych
 from src.data_loader import get_dataset_info
 from src.data_manipulator import (
     select_features, select_rows_by_class, replace_values,
     handle_missing_values, remove_duplicates, scale_data,
-    encode_class, add_polynomial_features
+    encode_class, add_polynomial_features, remove_rows_by_ranges,
+    replace_values_in_range
 )
-from src.utils import get_column_types
+from src.utils import get_column_types, parse_row_ranges, parse_value_range
 from components.descriptions import get_page_description, get_manipulation_method_description
 from components.ui_helpers import show_info_box, section_header, display_metric_group
 
@@ -38,10 +40,37 @@ def page_data_manipulation():
     if 'original_data' not in st.session_state:
         st.session_state.original_data = st.session_state.data.copy()
 
+    # Sekcja edycji danych w interfejsie
+    st.subheader("📝 Edycja danych")
+    with st.expander("✏️ Edytuj dane bezpośrednio", expanded=False):
+        st.markdown("""
+        **Instrukcja:** Poniżej możesz bezpośrednio edytować wartości w tabeli. 
+        Zmiany zostaną automatycznie zastosowane po kliknięciu poza edytowaną komórkę.
+        """)
+
+        # Edytowalna tabela danych
+        edited_data = st.data_editor(
+            st.session_state.data,
+            use_container_width=True,
+            num_rows="dynamic",  # Pozwala dodawać/usuwać wiersze
+            key="data_editor"
+        )
+
+        # Sprawdź czy dane zostały zmienione
+        if not edited_data.equals(st.session_state.data):
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("💾 Zastosuj zmiany", type="primary"):
+                    st.session_state.data = edited_data.copy()
+                    st.success("Zmiany zostały zastosowane!")
+                    st.rerun()
+            with col2:
+                if st.button("↩️ Anuluj zmiany"):
+                    st.info("Zmiany zostały anulowane.")
+                    st.rerun()
+
     # Wyświetl podgląd aktualnych danych
     st.subheader("Podgląd aktualnych danych")
-
-    # Podgląd danych
     st.dataframe(st.session_state.data.head(), use_container_width=True)
 
     # Menu operacji manipulacji danymi
@@ -55,7 +84,9 @@ def page_data_manipulation():
 
         - **Wybierz cechy**: Wybierz, które kolumny mają zostać zachowane w zbiorze danych
         - **Wybierz wiersze według klasy**: Filtruj dane, zachowując tylko wybrane klasy win
+        - **Usuń wiersze według numerów/zakresów**: Usuń konkretne wiersze podając numery lub zakresy (np. "1-5,8,10-12")
         - **Zastąp wartości**: Zastąp konkretne wartości w wybranej kolumnie innymi wartościami
+        - **Zastąp wartości w zakresie**: Zastąp wszystkie wartości w określonym zakresie jedną wartością
         - **Obsłuż brakujące wartości**: Wypełnij brakujące wartości (NaN) różnymi metodami
         - **Usuń duplikaty**: Usuń powtarzające się wiersze z danych
         - **Skaluj dane**: Znormalizuj lub wystandaryzuj wartości w kolumnach
@@ -67,9 +98,10 @@ def page_data_manipulation():
     # Wybór operacji
     operation = st.selectbox(
         "Wybierz operację do wykonania:",
-        ["Wybierz cechy", "Wybierz wiersze według klasy", "Zastąp wartości",
-         "Obsłuż brakujące wartości", "Usuń duplikaty", "Skaluj dane",
-         "Kodowanie binarne klasy", "Dodaj cechy wielomianowe", "Resetuj dane"]
+        ["Wybierz cechy", "Wybierz wiersze według klasy", "Usuń wiersze według numerów/zakresów",
+         "Zastąp wartości", "Zastąp wartości w zakresie", "Obsłuż brakujące wartości",
+         "Usuń duplikaty", "Skaluj dane", "Kodowanie binarne klasy", "Dodaj cechy wielomianowe",
+         "Resetuj dane"]
     )
 
     # Wykonaj wybraną operację
@@ -138,6 +170,58 @@ def page_data_manipulation():
                     st.error("Wybierz co najmniej jedną klasę.")
         else:
             st.error("Kolumna 'Class' nie istnieje w danych.")
+
+    elif operation == "Usuń wiersze według numerów/zakresów":
+        section_header("Usuń wiersze według numerów/zakresów", "Usuń konkretne wiersze podając ich numery lub zakresy")
+
+        with st.expander("ℹ️ Instrukcja używania zakresów", expanded=True):
+            st.markdown("""
+            **Jak podawać zakresy wierszy:**
+            
+            - **Pojedynczy wiersz**: `5` (usuwa wiersz numer 5)
+            - **Zakres wierszy**: `10-15` (usuwa wiersze od 10 do 15 włącznie)
+            - **Kombinacja**: `1-3,7,10-12,20` (usuwa wiersze 1-3, 7, 10-12 i 20)
+            
+            **Przykłady poprawnego formatu:**
+            - `1,3,5` - usuwa wiersze 1, 3 i 5
+            - `10-20` - usuwa wiersze od 10 do 20
+            - `1-5,8,15-20` - usuwa wiersze 1-5, wiersz 8 i wiersze 15-20
+            
+            **Uwaga:** Numeracja wierszy zaczyna się od 0!
+            """)
+
+        # Informacja o aktualnej liczbie wierszy
+        total_rows = len(st.session_state.data)
+        st.info(f"Aktualnie w zbiorze danych jest {total_rows} wierszy (indeksy 0-{total_rows-1})")
+
+        # Pole do wprowadzenia zakresów
+        row_ranges = st.text_input(
+            "Podaj numery/zakresy wierszy do usunięcia:",
+            placeholder="np. 1-5,8,10-12",
+            help="Wprowadź numery wierszy lub zakresy oddzielone przecinkami"
+        )
+
+        # Przycisk do zastosowania
+        if st.button("Usuń wiersze", key="apply_remove_rows"):
+            if row_ranges.strip():
+                try:
+                    # Parsuj zakresy
+                    rows_to_remove = parse_row_ranges(row_ranges, total_rows)
+
+                    if rows_to_remove:
+                        # Zastosuj usunięcie wierszy
+                        with st.spinner("Usuwanie wierszy..."):
+                            st.session_state.data = remove_rows_by_ranges(st.session_state.data, rows_to_remove)
+
+                        # Pokaż sukces
+                        st.success(f"Usunięto {len(rows_to_remove)} wierszy. Pozostało {len(st.session_state.data)} wierszy.")
+                    else:
+                        st.warning("Nie znaleziono poprawnych wierszy do usunięcia.")
+
+                except ValueError as e:
+                    st.error(f"Błąd w formacie zakresów: {str(e)}")
+            else:
+                st.error("Wprowadź zakresy wierszy do usunięcia.")
 
     elif operation == "Zastąp wartości":
         method_info = get_manipulation_method_description("replace_values")
@@ -221,6 +305,87 @@ def page_data_manipulation():
 
                     # Pokaż sukces
                     st.success(f"Zastąpiono wartości '{old_value}' na '{new_value}' w kolumnie {column}.")
+
+    elif operation == "Zastąp wartości w zakresie":
+        section_header("Zastąp wartości w zakresie", "Zastąp wszystkie wartości w określonym zakresie jedną wartością")
+
+        with st.expander("ℹ️ Instrukcja używania zakresów wartości", expanded=True):
+            st.markdown("""
+            **Jak podawać zakresy wartości:**
+            
+            - **Format**: `min-max` gdzie min i max to liczby rzeczywiste
+            - **Przykłady**: 
+              - `0.5-0.7` - zastąpi wszystkie wartości między 0.5 a 0.7 (włącznie)
+              - `10-20` - zastąpi wszystkie wartości między 10 a 20
+              - `0.1-0.3` - zastąpi wszystkie wartości między 0.1 a 0.3
+            
+            **Uwaga:** Operacja dotyczy tylko kolumn numerycznych!
+            """)
+
+        # Pobierz kolumny numeryczne
+        column_types = get_column_types(st.session_state.data)
+        numeric_cols = column_types.get('numeric', [])
+
+        if not numeric_cols:
+            st.error("Brak kolumn numerycznych w danych.")
+        else:
+            # Widget do wyboru kolumny
+            column = st.selectbox(
+                "Wybierz kolumnę numeryczną:",
+                numeric_cols,
+                help="Wybierz kolumnę, w której chcesz zastąpić wartości w zakresie"
+            )
+
+            if column:
+                # Pokaż statystyki kolumny
+                col_min = st.session_state.data[column].min()
+                col_max = st.session_state.data[column].max()
+                st.info(f"Kolumna '{column}': min = {col_min:.3f}, max = {col_max:.3f}")
+
+                # Pole do wprowadzenia zakresu
+                value_range = st.text_input(
+                    "Zakres wartości do zastąpienia:",
+                    placeholder="np. 0.5-0.7",
+                    help="Wprowadź zakres w formacie 'min-max'"
+                )
+
+                # Nowa wartość
+                new_value = st.number_input(
+                    "Nowa wartość:",
+                    value=0.0,
+                    step=0.1,
+                    help="Wartość, którą zostaną zastąpione wszystkie wartości w zakresie"
+                )
+
+                # Przycisk do zastosowania
+                if st.button("Zastąp wartości w zakresie", key="apply_replace_range"):
+                    if value_range.strip():
+                        try:
+                            # Parsuj zakres
+                            min_val, max_val = parse_value_range(value_range)
+
+                            # Sprawdź czy zakres jest w granicach danych
+                            if min_val > col_max or max_val < col_min:
+                                st.warning(f"Zakres {min_val}-{max_val} nie pokrywa się z wartościami w kolumnie.")
+                            else:
+                                # Zastosuj zastąpienie wartości w zakresie
+                                with st.spinner("Zastępowanie wartości..."):
+                                    affected_rows = st.session_state.data[
+                                        (st.session_state.data[column] >= min_val) &
+                                        (st.session_state.data[column] <= max_val)
+                                    ].shape[0]
+
+                                    st.session_state.data = replace_values_in_range(
+                                        st.session_state.data, column, min_val, max_val, new_value
+                                    )
+
+                                # Pokaż sukces
+                                st.success(f"Zastąpiono {affected_rows} wartości z zakresu {min_val}-{max_val} na {new_value} w kolumnie '{column}'.")
+
+                        except ValueError as e:
+                            st.error(f"Błąd w formacie zakresu: {str(e)}")
+                    else:
+                        st.error("Wprowadź zakres wartości.")
 
     elif operation == "Obsłuż brakujące wartości":
         method_info = get_manipulation_method_description("missing_values")
