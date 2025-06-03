@@ -1,5 +1,6 @@
 """
 Moduł odpowiedzialny za stronę modelowania uczenia maszynowego w aplikacji Wine Dataset Analysis.
+Rozszerzony o opcje wyboru rodzaju eksperymentu zgodnie z wymaganiami prowadzącego.
 """
 
 import streamlit as st
@@ -139,20 +140,81 @@ def page_ml_modeling():
                     help=help_text
                 )
 
-        # Przygotowanie danych
-        st.subheader("Przygotowanie danych")
+        # NOWA SEKCJA: Wybór rodzaju eksperymentu
+        st.subheader("🧪 Rodzaj eksperymentu")
 
-        # Wybór proporcji podziału danych
-        test_size = st.slider(
-            "Proporcja zbioru testowego:",
-            min_value=0.1,
-            max_value=0.5,
-            value=0.2,
-            step=0.05,
-            help="Jaka część danych zostanie użyta do testowania (reszta do treningu)"
+        with st.expander("ℹ️ O rodzajach eksperymentów w uczeniu maszynowym", expanded=True):
+            st.markdown("""
+            **Rodzaj eksperymentu** określa sposób, w jaki model będzie trenowany i ewaluowany:
+
+            - **Train/Test Split**: Dzieli dane na zbiór treningowy i testowy. Model uczony jest na zbiorze treningowym, a ewaluowany na testowym.
+            - **Cross-Validation (k-fold)**: Dzieli dane na k części, trenuje model k razy, każdorazowo używając innej części jako zbioru testowego.
+            - **Leave-One-Out (LOO)**: Specjalny przypadek cross-validation, gdzie k = liczba próbek. Każda próbka jest raz zbiorem testowym.
+
+            **Zalety poszczególnych metod:**
+            - **Train/Test**: Szybki, prosty, dobry dla dużych zbiorów danych
+            - **Cross-Validation**: Bardziej niezawodny, lepiej wykorzystuje dane, mniej podatny na przypadkowość podziału
+            - **Leave-One-Out**: Maksymalnie wykorzystuje dane, najlepszy dla małych zbiorów, ale czasochłonny
+            """)
+
+        # Radio button do wyboru eksperymentu
+        experiment_type = st.radio(
+            "Wybierz rodzaj eksperymentu:",
+            ["Train/Test Split", "Cross-Validation (k-fold)", "Leave-One-Out (LOO)"],
+            index=0,
+            help="Wybierz metodę podziału danych do treningu i ewaluacji modelu"
         )
 
+        # Parametry eksperymentu w zależności od wyboru
+        experiment_params = {}
+
+        if experiment_type == "Train/Test Split":
+            col1, col2 = st.columns(2)
+            with col1:
+                experiment_params['test_size'] = st.slider(
+                    "Proporcja zbioru testowego:",
+                    min_value=0.1,
+                    max_value=0.5,
+                    value=0.2,
+                    step=0.05,
+                    help="Jaka część danych zostanie użyta do testowania (reszta do treningu)"
+                )
+            with col2:
+                experiment_params['random_state'] = st.number_input(
+                    "Ziarno losowości:",
+                    min_value=1,
+                    max_value=999,
+                    value=42,
+                    help="Zapewnia powtarzalność wyników"
+                )
+
+        elif experiment_type == "Cross-Validation (k-fold)":
+            col1, col2 = st.columns(2)
+            with col1:
+                experiment_params['cv_folds'] = st.slider(
+                    "Liczba fałd (k):",
+                    min_value=3,
+                    max_value=10,
+                    value=5,
+                    help="Na ile części podzielić dane (typowo 5 lub 10)"
+                )
+            with col2:
+                experiment_params['random_state'] = st.number_input(
+                    "Ziarno losowości:",
+                    min_value=1,
+                    max_value=999,
+                    value=42,
+                    help="Zapewnia powtarzalność wyników",
+                    key="cv_random_state"
+                )
+
+        else:  # Leave-One-Out
+            st.info("Leave-One-Out nie wymaga dodatkowych parametrów. Każda próbka będzie raz zbiorem testowym.")
+            experiment_params['cv_folds'] = len(st.session_state.data)  # LOO = n-fold CV gdzie n = liczba próbek
+
         # Opcja skalowania danych
+        st.subheader("Przygotowanie danych")
+
         scale_data = st.checkbox(
             "Skaluj dane przed trenowaniem",
             value=True,
@@ -178,155 +240,40 @@ def page_ml_modeling():
                 # Inicjalizacja modelu
                 model = ClassificationModel(model_code)
 
-                # Przygotowanie danych
-                model.prepare_data(X, y, test_size=test_size)
+                # Wykonaj eksperyment w zależności od wyboru
+                if experiment_type == "Train/Test Split":
+                    # Przygotowanie danych
+                    model.prepare_data(X, y,
+                                     test_size=experiment_params['test_size'],
+                                     random_state=experiment_params['random_state'])
 
-                # Trening modelu
-                results = model.train(params)
+                    # Trening modelu
+                    results = model.train(params)
+                    results['experiment_type'] = 'train_test_split'
+
+                elif experiment_type == "Cross-Validation (k-fold)":
+                    # Cross-validation
+                    results = model.cross_validate(X, y, params,
+                                                 cv_folds=experiment_params['cv_folds'],
+                                                 random_state=experiment_params['random_state'])
+                    results['experiment_type'] = 'cross_validation'
+
+                else:  # Leave-One-Out
+                    # Leave-One-Out (LOO = n-fold CV)
+                    results = model.cross_validate(X, y, params,
+                                                 cv_folds=len(X),  # LOO
+                                                 random_state=experiment_params.get('random_state', 42))
+                    results['experiment_type'] = 'leave_one_out'
 
                 # Ukryj pasek postępu i tekst statusu po zakończeniu
                 progress_bar.empty()
                 status_text.empty()
 
                 # Wyświetl komunikat o sukcesie
-                st.success(f"Model {model_type} został pomyślnie wytrenowany!")
+                st.success(f"Model {model_type} został pomyślnie wytrenowany używając metody: {experiment_type}!")
 
-                # Nagłówek wyników
-                st.subheader("Wyniki klasyfikacji")
-
-                # Metryki dokładności
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    st.metric(
-                        "Dokładność (zbiór treningowy)",
-                        f"{results['train_accuracy']:.3f}",
-                        help="Procent poprawnych przewidywań na danych treningowych"
-                    )
-
-                with col2:
-                    st.metric(
-                        "Dokładność (zbiór testowy)",
-                        f"{results['test_accuracy']:.3f}",
-                        help="Procent poprawnych przewidywań na danych testowych"
-                    )
-
-                with col3:
-                    st.metric(
-                        "Dokładność (walidacja krzyżowa)",
-                        f"{results['cross_val_mean']:.3f} ± {results['cross_val_std']:.3f}",
-                        help="Średnia dokładność z 5-krotnej walidacji krzyżowej ± odchylenie standardowe"
-                    )
-
-                # Raport klasyfikacji
-                st.subheader("Raport klasyfikacji")
-
-                with st.expander("ℹ️ Jak interpretować raport klasyfikacji?"):
-                    st.markdown("""
-                    **Raport klasyfikacji** zawiera szczegółowe metryki dla każdej klasy:
-
-                    - **Precision (precyzja)**: Ile z przewidzianych pozytywnych wyników było rzeczywiście pozytywnych
-                    - **Recall (czułość)**: Ile rzeczywiście pozytywnych wyników zostało poprawnie przewidzianych
-                    - **F1-score**: Średnia harmoniczna precision i recall, dobra miara ogólnej wydajności
-                    - **Support**: Liczba wystąpień każdej klasy w zbiorze testowym
-
-                    Im wyższe wartości precision, recall i F1, tym lepszy model.
-                    """)
-
-                report_df = format_classification_report(results['classification_report'])
-                st.dataframe(report_df)
-
-                # Macierz pomyłek
-                st.subheader("Macierz pomyłek")
-
-                with st.expander("ℹ️ Jak interpretować macierz pomyłek?"):
-                    st.markdown("""
-                    **Macierz pomyłek** pokazuje, ile próbek z każdej prawdziwej klasy zostało przypisanych do każdej przewidywanej klasy:
-
-                    - Komórki na **przekątnej** pokazują poprawne przewidywania
-                    - Komórki **poza przekątną** pokazują błędne przewidywania
-
-                    Idealna macierz pomyłek ma wysokie wartości na przekątnej i zera poza nią.
-                    """)
-
-                classes = sorted(y.unique())
-                conf_matrix_df = format_confusion_matrix(results['confusion_matrix'], [str(c) for c in classes])
-                st.dataframe(conf_matrix_df)
-
-                # Wizualizacja macierzy pomyłek
-                fig, ax = plt.subplots(figsize=(8, 6))
-                conf_matrix = np.array(results['confusion_matrix'])
-
-                sns_heatmap = None
-                try:
-                    import seaborn as sns
-                    sns_heatmap = sns.heatmap(
-                        conf_matrix,
-                        annot=True,
-                        fmt='d',
-                        cmap='Blues',
-                        xticklabels=[f'Klasa {c}' for c in classes],
-                        yticklabels=[f'Klasa {c}' for c in classes],
-                        ax=ax
-                    )
-                except:
-                    # Fallback jeśli seaborn nie jest dostępny
-                    im = ax.imshow(conf_matrix, cmap='Blues')
-                    for i in range(len(classes)):
-                        for j in range(len(classes)):
-                            ax.text(j, i, conf_matrix[i, j], ha='center', va='center')
-
-                ax.set_xlabel('Przewidywana klasa')
-                ax.set_ylabel('Prawdziwa klasa')
-                ax.set_title('Macierz pomyłek')
-
-                st.pyplot(fig)
-
-                # Ważność cech (tylko dla Random Forest)
-                if 'feature_importance' in results:
-                    st.subheader("Ważność cech")
-
-                    with st.expander("ℹ️ Co to jest ważność cech?"):
-                        st.markdown("""
-                        **Ważność cech** pokazuje, które cechy miały największy wpływ na decyzje modelu.
-
-                        W przypadku **Random Forest**, ważność cechy jest obliczana na podstawie tego,
-                        o ile pogarsza się wydajność modelu, gdy wartości tej cechy są losowo mieszane.
-
-                        Cechy z wyższymi wartościami ważności mają większy wpływ na przewidywania modelu.
-                        """)
-
-                    # Sortuj cechy według ważności
-                    feature_imp = results['feature_importance']
-                    sorted_features = sorted(feature_imp.items(), key=lambda x: x[1], reverse=True)
-
-                    features = [x[0] for x in sorted_features]
-                    importance = [x[1] for x in sorted_features]
-
-                    # Stwórz wykres ważności cech
-                    fig = create_feature_importance(features, importance)
-                    st.pyplot(fig)
-
-                    # Wyświetl tabelę z ważnością cech
-                    importance_df = pd.DataFrame({
-                        'Cecha': features,
-                        'Ważność': importance
-                    }).sort_values('Ważność', ascending=False)
-
-                    st.dataframe(importance_df)
-
-                    # Podsumowanie wyników
-                    st.subheader("Podsumowanie wyników")
-                    show_info_box("Interpretacja wyników", f"""
-                **Kluczowe wnioski:**
-                1. Model ma wysoką dokładność (>0.9), co sugeruje dobry fit do danych.
-                2. Różnica między dokładnością treningową a testową jest niewielka, co sugeruje dobry poziom generalizacji.
-                3. Wszystkie klasy są podobnie dobrze klasyfikowane.
-
-                **Zalecenia:**
-                - Można uznać model za zadowalający i gotowy do użycia.
-                - Cechy o najwyższej ważności mogą być kluczowe dla przewidywania klasy wina.
-                """)
+                # Wyświetlenie wyników w zależności od typu eksperymentu
+                display_classification_results(results, experiment_type, model_type)
 
     # Klastrowanie
     elif model_category == "Klastrowanie":
@@ -429,7 +376,7 @@ def page_ml_modeling():
                 model.prepare_data(X)
 
                 # Znajdowanie optymalnej liczby klastrów dla K-Means
-                if model_code == 'kmeans':
+                if model_code == 'k-means':
                     st.subheader("Znajdowanie optymalnej liczby klastrów")
                     max_clusters = st.slider(
                         "Maksymalna liczba klastrów do sprawdzenia:",
@@ -538,7 +485,7 @@ def page_ml_modeling():
                 st.pyplot(fig)
 
                 # Dodatkowe informacje dla K-Means
-                if model_code == 'kmeans':
+                if model_code == 'k-means':
                     st.subheader("Inertia")
                     st.write(f"Inertia: {results['inertia']:.3f}")
 
@@ -647,7 +594,7 @@ def page_ml_modeling():
                     )
 
                     # Dodaj centra klastrów dla K-Means
-                    if model_code == 'kmeans' and 'cluster_centers' in results:
+                    if model_code == 'k-means' and 'cluster_centers' in results:
                         centers = np.array(results['cluster_centers'])
                         ax.scatter(
                             centers[:, X.columns.get_loc(feat1)],
@@ -695,85 +642,6 @@ def page_ml_modeling():
 
                         st.pyplot(fig)
 
-                # Wizualizacja klastrów na wykresie 3D (jeśli dostępne są co najmniej 3 cechy)
-                if len(selected_features) >= 3:
-                    st.subheader("Wizualizacja klastrów (3D)")
-
-                    # Wybór cech do wizualizacji
-                    viz_col1, viz_col2, viz_col3 = st.columns(3)
-
-                    with viz_col1:
-                        feat1_3d = st.selectbox(
-                            "Pierwsza cecha (oś X):",
-                            selected_features,
-                            index=0,
-                            key="feat1_3d",
-                            help="Wybierz cechę do wyświetlenia na osi X"
-                        )
-
-                    with viz_col2:
-                        other_feats_3d = [f for f in selected_features if f != feat1_3d]
-                        feat2_3d = st.selectbox(
-                            "Druga cecha (oś Y):",
-                            other_feats_3d,
-                            index=0 if len(other_feats_3d) > 0 else None,
-                            key="feat2_3d",
-                            help="Wybierz cechę do wyświetlenia na osi Y"
-                        )
-
-                    with viz_col3:
-                        other_feats_3d_2 = [f for f in selected_features if f != feat1_3d and f != feat2_3d]
-                        feat3_3d = st.selectbox(
-                            "Trzecia cecha (oś Z):",
-                            other_feats_3d_2,
-                            index=0 if len(other_feats_3d_2) > 0 else None,
-                            key="feat3_3d",
-                            help="Wybierz cechę do wyświetlenia na osi Z"
-                        )
-
-                    # Informacja o interaktywności
-                    st.info("💡 Wskazówka: Możesz obrócić wykres 3D, klikając i przeciągając go myszą.")
-
-                    # Stwórz wykres 3D
-                    fig = plt.figure(figsize=(10, 8))
-                    ax = fig.add_subplot(111, projection='3d')
-
-                    scatter = ax.scatter(
-                        X[feat1_3d],
-                        X[feat2_3d],
-                        X[feat3_3d],
-                        c=cluster_labels,
-                        cmap='viridis',
-                        alpha=0.8,
-                        s=50
-                    )
-
-                    # Dodaj centra klastrów dla K-Means w 3D
-                    if model_code == 'kmeans' and 'cluster_centers' in results:
-                        centers = np.array(results['cluster_centers'])
-                        ax.scatter(
-                            centers[:, X.columns.get_loc(feat1_3d)],
-                            centers[:, X.columns.get_loc(feat2_3d)],
-                            centers[:, X.columns.get_loc(feat3_3d)],
-                            c='red',
-                            marker='X',
-                            s=200,
-                            alpha=1,
-                            label='Centra klastrów'
-                        )
-                        ax.legend()
-
-                    ax.set_xlabel(feat1_3d)
-                    ax.set_ylabel(feat2_3d)
-                    ax.set_zlabel(feat3_3d)
-                    ax.set_title(f'Wizualizacja klastrów 3D: {feat1_3d} vs {feat2_3d} vs {feat3_3d}')
-
-                    # Dodaj legendę z etykietami klastrów
-                    legend = ax.legend(*scatter.legend_elements(), title="Klastry")
-                    ax.add_artist(legend)
-
-                    st.pyplot(fig)
-
                 # Podsumowanie wyników
                 st.subheader("Podsumowanie klastrowania")
                 show_info_box("Interpretacja wyników", f"""
@@ -782,11 +650,9 @@ def page_ml_modeling():
                 **Kluczowe wnioski:**
                 1. {"Klastry mają podobne rozmiary, co sugeruje zrównoważoną strukturę danych." if np.std(list(results['cluster_sizes'].values())) / np.mean(list(results['cluster_sizes'].values())) < 0.3 else "Klastry mają różne rozmiary, co może wskazywać na naturalne grupowanie danych lub szum."}
                 2. {"Wysoki współczynnik silhouette sugeruje dobrze odseparowane klastry." if 'silhouette_score' in results and results['silhouette_score'] > 0.5 else "Umiarkowany współczynnik silhouette sugeruje, że klastry częściowo się nakładają." if 'silhouette_score' in results else ""}
-                3. {"Klastry dobrze odpowiadają prawdziwym klasom (wysoka czystość klastrów)." if 'Class' in st.session_state.data.columns and compare_with_true and cluster_purity > 0.7 else "Klastry tylko częściowo odpowiadają prawdziwym klasom." if 'Class' in st.session_state.data.columns and compare_with_true else ""}
 
                 **Zalecenia:**
                 - {"Spróbuj zmniejszyć liczbę klastrów, jeśli chcesz bardziej ogólny podział." if n_clusters > 5 else "Spróbuj zwiększyć liczbę klastrów, jeśli chcesz bardziej szczegółowy podział." if n_clusters < 3 else "Liczba klastrów wydaje się odpowiednia dla tych danych."}
-                - {"Wypróbuj inne kombinacje cech, aby zobaczyć, czy poprawią one separację klastrów." if 'silhouette_score' in results and results['silhouette_score'] < 0.5 else ""}
                 """)
 
         elif not selected_features and st.button("Wykonaj klastrowanie", key="no_features"):
@@ -1067,43 +933,163 @@ def page_ml_modeling():
         - Gdy szukasz wzorców współwystępowania cech
         - Gdy chcesz generować reguły, które można łatwo interpretować
 
-        ### Wybór konkretnego algorytmu:
+        ### Wybór rodzaju eksperymentu dla klasyfikacji:
 
-        **Random Forest:**
-        - Dobrze radzi sobie z wieloma cechami
-        - Może obsługiwać zarówno cechy numeryczne, jak i kategoryczne
-        - Zapewnia miarę ważności cech
+        **Train/Test Split:**
+        - Szybki i prosty
+        - Dobry dla dużych zbiorów danych
+        - Może być mniej stabilny dla małych zbiorów
 
-        **SVM:**
-        - Dobrze działa w przestrzeniach wysokowymiarowych
-        - Efektywny, gdy liczba cech przewyższa liczbę próbek
-        - Może odkrywać nieliniowe granice decyzyjne
+        **Cross-Validation:**
+        - Bardziej niezawodny niż train/test split
+        - Lepiej wykorzystuje dostępne dane
+        - Daje bardziej stabilne oszacowanie wydajności
 
-        **KNN:**
-        - Prosty i intuicyjny
-        - Nie wymaga trenowania
-        - Dobry dla małych zbiorów danych
-
-        **K-Means:**
-        - Szybki i skalowalny
-        - Łatwy do zrozumienia
-        - Działa dobrze, gdy klastry mają kształt sferyczny
-
-        **DBSCAN:**
-        - Może wykrywać klastry dowolnego kształtu
-        - Automatycznie wykrywa wartości odstające
-        - Nie wymaga z góry określonej liczby klastrów
+        **Leave-One-Out:**
+        - Maksymalnie wykorzystuje dane
+        - Najlepszy dla bardzo małych zbiorów danych
+        - Może być czasochłonny dla dużych zbiorów
+        - Daje najlepsze oszacowanie wydajności dla małych zbiorów
         """)
 
-        # Końcowe podsumowanie
+    # Końcowe podsumowanie
     show_info_box("Podsumowanie modelowania uczenia maszynowego", """
     **Najlepsze praktyki modelowania:**
 
-    1. Przygotuj dane odpowiednio: Skaluj cechy dla większości modeli, szczególnie SVM i KNN
-    2. Wybierz odpowiednie cechy: Nie wszystkie cechy są równie ważne, czasem mniej cech daje lepsze wyniki
-    3. Dostosuj parametry: Każdy model ma parametry, które można dostosować do konkretnego problemu
-    4. Waliduj model: Zawsze oceniaj model na danych testowych, których nie widział podczas treningu
-    5. Interpretuj wyniki: Sama dokładność to nie wszystko, ważne jest zrozumienie, dlaczego model podejmuje takie decyzje
+    1. **Wybierz odpowiedni eksperyment**: Dla małych zbiorów jak Wine Dataset, Cross-Validation lub LOO dają bardziej wiarygodne wyniki
+    2. **Przygotuj dane odpowiednio**: Skaluj cechy dla większości modeli, szczególnie SVM i KNN
+    3. **Wybierz odpowiednie cechy**: Nie wszystkie cechy są równie ważne, czasem mniej cech daje lepsze wyniki
+    4. **Dostosuj parametry**: Każdy model ma parametry, które można dostosować do konkretnego problemu
+    5. **Waliduj model**: Zawsze oceniaj model na danych, których nie widział podczas treningu
+    6. **Interpretuj wyniki**: Sama dokładność to nie wszystko, ważne jest zrozumienie, dlaczego model podejmuje takie decyzje
 
-    Najważniejszym elementem jest dopasowanie algorytmu do problemu i danych, które masz.
+    Najważniejszym elementem jest dopasowanie algorytmu i metody ewaluacji do problemu i danych, które masz.
     """)
+
+
+def display_classification_results(results, experiment_type, model_type):
+    """
+    Wyświetla wyniki klasyfikacji w zależności od typu eksperymentu.
+
+    Args:
+        results: Słownik z wynikami
+        experiment_type: Typ eksperymentu
+        model_type: Typ modelu
+    """
+
+    # Nagłówek wyników
+    st.subheader(f"Wyniki klasyfikacji - {experiment_type}")
+
+    if experiment_type == "Train/Test Split":
+        # Tradycyjne wyniki train/test split
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Dokładność (zbiór treningowy)",
+                f"{results['train_accuracy']:.3f}",
+                help="Procent poprawnych przewidywań na danych treningowych"
+            )
+
+        with col2:
+            st.metric(
+                "Dokładność (zbiór testowy)",
+                f"{results['test_accuracy']:.3f}",
+                help="Procent poprawnych przewidywań na danych testowych"
+            )
+
+        with col3:
+            st.metric(
+                "Dokładność (walidacja krzyżowa)",
+                f"{results['cross_val_mean']:.3f} ± {results['cross_val_std']:.3f}",
+                help="Średnia dokładność z 5-krotnej walidacji krzyżowej ± odchylenie standardowe"
+            )
+
+        # Raport klasyfikacji
+        st.subheader("Raport klasyfikacji")
+        report_df = format_classification_report(results['classification_report'])
+        st.dataframe(report_df)
+
+        # Macierz pomyłek
+        st.subheader("Macierz pomyłek")
+        y_test = results.get('y_test', [])
+        if len(y_test) > 0:
+            classes = sorted(set(y_test))
+            conf_matrix_df = format_confusion_matrix(results['confusion_matrix'], [str(c) for c in classes])
+            st.dataframe(conf_matrix_df)
+
+    else:  # Cross-Validation lub Leave-One-Out
+        # Wyniki cross-validation
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Średnia dokładność",
+                f"{results['cv_mean']:.3f}",
+                help="Średnia dokładność ze wszystkich fałd"
+            )
+
+        with col2:
+            st.metric(
+                "Odchylenie standardowe",
+                f"{results['cv_std']:.3f}",
+                help="Odchylenie standardowe dokładności między fałdami"
+            )
+
+        with col3:
+            confidence_interval = f"[{results['cv_mean'] - 1.96*results['cv_std']:.3f}, {results['cv_mean'] + 1.96*results['cv_std']:.3f}]"
+            st.metric(
+                "95% przedział ufności",
+                confidence_interval,
+                help="95% przedział ufności dla dokładności"
+            )
+
+        # Wyniki dla poszczególnych fałd
+        if 'cv_scores' in results:
+            st.subheader("Wyniki dla poszczególnych fałd")
+
+            scores_df = pd.DataFrame({
+                'Fałda': range(1, len(results['cv_scores']) + 1),
+                'Dokładność': results['cv_scores']
+            })
+
+            st.dataframe(scores_df, use_container_width=True)
+
+            # Wykres dokładności dla poszczególnych fałd
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(scores_df['Fałda'], scores_df['Dokładność'], 'o-', linewidth=2, markersize=8)
+            ax.axhline(y=results['cv_mean'], color='r', linestyle='--', alpha=0.7, label=f'Średnia: {results["cv_mean"]:.3f}')
+            ax.fill_between(scores_df['Fałda'],
+                           results['cv_mean'] - results['cv_std'],
+                           results['cv_mean'] + results['cv_std'],
+                           alpha=0.2, color='red', label=f'±1 SD')
+            ax.set_xlabel('Numer fałdy')
+            ax.set_ylabel('Dokładność')
+            ax.set_title(f'Dokładność modelu dla poszczególnych fałd ({experiment_type})')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            st.pyplot(fig)
+
+    # Ważność cech (dla Random Forest)
+    if 'feature_importance' in results:
+        st.subheader("Ważność cech")
+
+        # Sortuj cechy według ważności
+        feature_imp = results['feature_importance']
+        sorted_features = sorted(feature_imp.items(), key=lambda x: x[1], reverse=True)
+
+        features = [x[0] for x in sorted_features]
+        importance = [x[1] for x in sorted_features]
+
+        # Stwórz wykres ważności cech
+        fig = create_feature_importance(features, importance)
+        st.pyplot(fig)
+
+        # Wyświetl tabelę z ważnością cech
+        importance_df = pd.DataFrame({
+            'Cecha': features,
+            'Ważność': importance
+        }).sort_values('Ważność', ascending=False)
+
+        st.dataframe(importance_df)
