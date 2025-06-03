@@ -6,11 +6,137 @@ import pandas as pd
 import numpy as np
 import os
 import pickle
+import re
 from typing import Any, Dict, List, Optional, Tuple, Union
 import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
 import base64
+
+
+def parse_row_ranges(range_string: str, max_rows: int) -> List[int]:
+    """
+    Parsuje string z zakresami wierszy do listy indeksów.
+
+    Args:
+        range_string: String z zakresami np. "1-5,8,10-12"
+        max_rows: Maksymalna liczba wierszy w DataFrame
+
+    Returns:
+        Lista indeksów wierszy do usunięcia
+
+    Raises:
+        ValueError: Jeśli format jest niepoprawny
+    """
+    if not range_string.strip():
+        return []
+
+    # Usuń spacje i podziel na części
+    parts = [part.strip() for part in range_string.split(',')]
+    indices = []
+
+    for part in parts:
+        if not part:
+            continue
+
+        # Sprawdź czy to zakres (zawiera myślnik)
+        if '-' in part:
+            # Parsuj zakres
+            try:
+                start_str, end_str = part.split('-', 1)
+                start = int(start_str.strip())
+                end = int(end_str.strip())
+
+                # Walidacja zakresu
+                if start < 0 or end < 0:
+                    raise ValueError(f"Indeksy nie mogą być ujemne: {part}")
+                if start >= max_rows or end >= max_rows:
+                    raise ValueError(f"Indeks poza zakresem (max {max_rows-1}): {part}")
+                if start > end:
+                    raise ValueError(f"Początek zakresu większy od końca: {part}")
+
+                # Dodaj wszystkie indeksy z zakresu
+                indices.extend(range(start, end + 1))
+
+            except ValueError as e:
+                if "invalid literal for int()" in str(e):
+                    raise ValueError(f"Niepoprawny format zakresu: {part}")
+                raise e
+        else:
+            # Parsuj pojedynczy indeks
+            try:
+                index = int(part.strip())
+
+                # Walidacja indeksu
+                if index < 0:
+                    raise ValueError(f"Indeks nie może być ujemny: {index}")
+                if index >= max_rows:
+                    raise ValueError(f"Indeks poza zakresem (max {max_rows-1}): {index}")
+
+                indices.append(index)
+
+            except ValueError as e:
+                if "invalid literal for int()" in str(e):
+                    raise ValueError(f"Niepoprawny format indeksu: {part}")
+                raise e
+
+    # Usuń duplikaty i posortuj
+    return sorted(list(set(indices)))
+
+
+def parse_value_range(range_string: str) -> Tuple[float, float]:
+    """
+    Parsuje string z zakresem wartości do krotki (min, max).
+
+    Args:
+        range_string: String z zakresem np. "0.5-0.7"
+
+    Returns:
+        Krotka (min_val, max_val)
+
+    Raises:
+        ValueError: Jeśli format jest niepoprawny
+    """
+    if not range_string.strip():
+        raise ValueError("Pusty string zakresu")
+
+    # Usuń spacje
+    range_string = range_string.strip()
+
+    # Sprawdź czy zawiera myślnik
+    if '-' not in range_string:
+        raise ValueError("Zakres musi zawierać myślnik (np. '0.5-0.7')")
+
+    # Podziel na części
+    parts = range_string.split('-')
+
+    # Obsłuż przypadek liczb ujemnych
+    if len(parts) == 3 and parts[0] == '':
+        # Przypadek: "-1.5-0.5" -> ['', '1.5', '0.5']
+        min_str = '-' + parts[1]
+        max_str = parts[2]
+    elif len(parts) == 4 and parts[0] == '' and parts[2] == '':
+        # Przypadek: "-1.5--0.5" -> ['', '1.5', '', '0.5']
+        min_str = '-' + parts[1]
+        max_str = '-' + parts[3]
+    elif len(parts) == 2:
+        # Normalny przypadek: "0.5-0.7" -> ['0.5', '0.7']
+        min_str = parts[0]
+        max_str = parts[1]
+    else:
+        raise ValueError(f"Niepoprawny format zakresu: {range_string}")
+
+    try:
+        min_val = float(min_str.strip())
+        max_val = float(max_str.strip())
+    except ValueError:
+        raise ValueError(f"Niepoprawne wartości liczbowe w zakresie: {range_string}")
+
+    # Walidacja zakresu
+    if min_val > max_val:
+        raise ValueError(f"Minimum większe od maksimum: {min_val} > {max_val}")
+
+    return min_val, max_val
 
 
 def get_column_types(df: pd.DataFrame) -> Dict[str, List[str]]:
