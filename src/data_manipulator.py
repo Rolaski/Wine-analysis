@@ -48,6 +48,32 @@ def select_rows_by_class(df: pd.DataFrame, class_values: List[int]) -> pd.DataFr
     return df[df['Class'].isin(class_values)].copy()
 
 
+def remove_rows_by_ranges(df: pd.DataFrame, rows_to_remove: List[int]) -> pd.DataFrame:
+    """
+    Usuwa wiersze według podanych indeksów.
+
+    Args:
+        df: DataFrame z danymi
+        rows_to_remove: Lista indeksów wierszy do usunięcia
+
+    Returns:
+        DataFrame z usuniętymi wierszami
+    """
+    if df is None:
+        return None
+
+    result_df = df.copy()
+
+    # Filtruj indeksy, które rzeczywiście istnieją w DataFrame
+    valid_indices = [idx for idx in rows_to_remove if idx < len(result_df)]
+
+    if valid_indices:
+        # Usuń wiersze według indeksów
+        result_df = result_df.drop(result_df.index[valid_indices]).reset_index(drop=True)
+
+    return result_df
+
+
 def replace_values(df: pd.DataFrame, column: str, old_value: Union[int, float],
                    new_value: Union[int, float, str, None]) -> pd.DataFrame:
     """
@@ -74,13 +100,53 @@ def replace_values(df: pd.DataFrame, column: str, old_value: Union[int, float],
         return df
 
 
-def handle_missing_values(df: pd.DataFrame, strategy: str = 'mean') -> pd.DataFrame:
+def replace_values_in_range(df: pd.DataFrame, column: str, min_val: float, max_val: float, new_value: float) -> pd.DataFrame:
+    """
+    Zastępuje wszystkie wartości w określonym zakresie jedną wartością.
+
+    Args:
+        df: DataFrame z danymi
+        column: Nazwa kolumny
+        min_val: Minimalna wartość zakresu
+        max_val: Maksymalna wartość zakresu
+        new_value: Nowa wartość
+
+    Returns:
+        DataFrame ze zmienionymi wartościami
+    """
+    if df is None:
+        return None
+
+    result_df = df.copy()
+
+    try:
+        # Sprawdź czy kolumna istnieje
+        if column not in result_df.columns:
+            raise KeyError(f"Kolumna {column} nie istnieje w zbiorze danych.")
+
+        # Sprawdź czy kolumna jest numeryczna
+        if not np.issubdtype(result_df[column].dtype, np.number):
+            raise TypeError(f"Kolumna {column} nie jest numeryczna.")
+
+        # Zastąp wartości w zakresie
+        mask = (result_df[column] >= min_val) & (result_df[column] <= max_val)
+        result_df.loc[mask, column] = new_value
+
+        return result_df
+
+    except (KeyError, TypeError) as e:
+        print(f"Błąd: {str(e)}")
+        return df
+
+
+def handle_missing_values(df: pd.DataFrame, strategy: str = 'mean', fill_value: Optional[float] = None) -> pd.DataFrame:
     """
     Obsługuje brakujące wartości w danych.
 
     Args:
         df: DataFrame z danymi
         strategy: Strategia wypełniania braków ('mean', 'median', 'most_frequent', 'constant')
+        fill_value: Wartość do wypełnienia (tylko dla strategii 'constant')
 
     Returns:
         DataFrame z uzupełnionymi wartościami
@@ -94,15 +160,23 @@ def handle_missing_values(df: pd.DataFrame, strategy: str = 'mean') -> pd.DataFr
     numeric_cols = result_df.select_dtypes(include=np.number).columns
 
     # Wypełnianie brakujących wartości w kolumnach numerycznych
-    if numeric_cols.any():
-        imputer = SimpleImputer(strategy=strategy)
+    if len(numeric_cols) > 0:
+        if strategy == 'constant' and fill_value is not None:
+            imputer = SimpleImputer(strategy=strategy, fill_value=fill_value)
+        else:
+            imputer = SimpleImputer(strategy=strategy)
         result_df[numeric_cols] = imputer.fit_transform(result_df[numeric_cols])
 
     # Wypełnianie brakujących wartości w kolumnach kategorycznych (np. Class)
     cat_cols = result_df.select_dtypes(exclude=np.number).columns
     if len(cat_cols) > 0:
         for col in cat_cols:
-            result_df[col] = result_df[col].fillna(result_df[col].mode()[0])
+            if strategy == 'constant' and fill_value is not None:
+                result_df[col] = result_df[col].fillna(fill_value)
+            else:
+                mode_val = result_df[col].mode()
+                if not mode_val.empty:
+                    result_df[col] = result_df[col].fillna(mode_val[0])
 
     return result_df
 
@@ -202,9 +276,10 @@ def encode_class(df: pd.DataFrame) -> pd.DataFrame:
     encoded = encoder.fit_transform(result_df[['Class']])
 
     # Stwórz DataFrame z zakodowanymi danymi
+    class_values = sorted(result_df['Class'].unique())
     encoded_df = pd.DataFrame(
         encoded,
-        columns=[f'Class_{i}' for i in range(1, encoded.shape[1] + 1)]
+        columns=[f'Class_{i}' for i in class_values]
     )
 
     # Połącz z oryginalnym DataFrame
