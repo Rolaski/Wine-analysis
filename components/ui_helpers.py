@@ -35,6 +35,7 @@ def set_page_config():
     .stProgress .st-bo {
         background-color: #722F37;
     }
+    
     </style>
     """, unsafe_allow_html=True)
 
