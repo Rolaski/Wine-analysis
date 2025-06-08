@@ -401,12 +401,12 @@ class ClusteringModel:
 
         # Obsługa różnych wariantów nazw dla K-Means
         model_type_normalized = self.model_type.lower().replace('-', '').replace(' ', '')
-        if 'kmeans' in model_type_normalized or 'k-means' in self.model_type.lower():
+        if 'kmeans' in model_type_normalized or self.model_type.lower() == 'kmeans':
             n_clusters = params.get('n_clusters', 3)
             self.n_clusters = n_clusters
             return KMeans(n_clusters=n_clusters, random_state=42)
 
-        elif self.model_type == 'dbscan':
+        elif self.model_type.lower() == 'dbscan':
             eps = params.get('eps', 0.5)
             min_samples = params.get('min_samples', 5)
             return DBSCAN(eps=eps, min_samples=min_samples)
@@ -500,7 +500,9 @@ class ClusteringModel:
         if self.X is None:
             return {"error": "Dane nie zostały przygotowane. Wywołaj prepare_data() najpierw."}
 
-        if self.model_type != 'kmeans':
+        # Sprawdź typ modelu z obsługą różnych wariantów nazw
+        model_type_normalized = self.model_type.lower().replace('-', '').replace(' ', '')
+        if 'kmeans' not in model_type_normalized and 'k-means' not in self.model_type.lower():
             return {"error": "Metoda dostępna tylko dla KMeans."}
 
         # Listy na wyniki
