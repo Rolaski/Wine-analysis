@@ -7,16 +7,74 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 from typing import Tuple, Optional, Union, Dict
-import io
+import sys
 
 
-def load_wine_dataset(data_path: str = "./data/wine.data") -> pd.DataFrame:
+def get_app_data_path() -> str:
+    """
+    Zwraca właściwą ścieżkę do katalogu z danymi w zależności od środowiska.
+
+    Returns:
+        Ścieżka do katalogu z danymi
+    """
+    # Sprawdź czy jest to środowisko Electron
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller bundle
+        base_path = sys._MEIPASS
+    elif os.environ.get('ELECTRON_RUN_AS_NODE'):
+        # Electron environment
+        # Sprawdź czy aplikacja jest spakowana
+        if os.environ.get('PORTABLE_EXECUTABLE_DIR'):
+            # Spakowana aplikacja Electron
+            base_path = os.path.join(os.environ.get('PORTABLE_EXECUTABLE_DIR', ''), 'resources', 'streamlit_app')
+        else:
+            # Development mode - sprawdź różne możliwe lokalizacje
+            possible_paths = [
+                os.path.join(os.getcwd(), 'streamlit_app'),  # Jeśli CWD to główny katalog projektu
+                os.getcwd(),  # Jeśli CWD to katalog streamlit_app
+                os.path.dirname(os.path.abspath(__file__)),  # Katalog tego pliku
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'streamlit_app')
+            ]
+
+            base_path = None
+            for path in possible_paths:
+                if os.path.exists(os.path.join(path, 'data', 'wine.data')):
+                    base_path = path
+                    break
+
+            if base_path is None:
+                # Fallback - użyj katalogu tego pliku
+                base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    else:
+        # Standardowe środowisko Python/Streamlit
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    data_path = os.path.join(base_path, 'data')
+
+    # Upewnij się, że ścieżka istnieje
+    if not os.path.exists(data_path):
+        # Spróbuj alternatywne lokalizacje
+        alternative_paths = [
+            os.path.join(os.getcwd(), 'data'),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data'),
+            os.path.join(os.path.dirname(sys.argv[0]), 'data') if sys.argv else None,
+        ]
+
+        for alt_path in alternative_paths:
+            if alt_path and os.path.exists(alt_path):
+                data_path = alt_path
+                break
+
+    return data_path
+
+
+def load_wine_dataset(data_path: Optional[str] = None) -> pd.DataFrame:
     """
     Wczytuje zbiór danych Wine Dataset i dodaje odpowiednie nagłówki.
     Wywoływana na początku aplikacji.
 
     Args:
-        data_path: Ścieżka do pliku z danymi
+        data_path: Ścieżka do pliku z danymi (opcjonalna)
 
     Returns:
         DataFrame z wczytanymi danymi i nagłówkami
@@ -39,17 +97,95 @@ def load_wine_dataset(data_path: str = "./data/wine.data") -> pd.DataFrame:
         'Proline'
     ]
 
-    # Wczytanie danych z dodaniem nagłówków
-    try:
-        wine_df = pd.read_csv(data_path, header=None, names=column_names)
-        print(f"Wczytano dane z {data_path} pomyślnie.")
-        return wine_df
-    except FileNotFoundError:
-        print(f"Plik {data_path} nie istnieje.")
-        return None
-    except Exception as e:
-        print(f"Wystąpił błąd podczas wczytywania danych: {e}")
-        return None
+    # Jeśli nie podano ścieżki, znajdź automatycznie
+    if data_path is None:
+        data_dir = get_app_data_path()
+        data_path = os.path.join(data_dir, 'wine.data')
+
+    # Sprawdź możliwe lokalizacje pliku
+    possible_files = [
+        data_path,
+        os.path.join(get_app_data_path(), 'wine.data'),
+        os.path.join(os.getcwd(), 'data', 'wine.data'),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', 'wine.data'),
+        './data/wine.data',  # Fallback na względną ścieżkę
+    ]
+
+    # Spróbuj wczytać z każdej możliwej lokalizacji
+    for file_path in possible_files:
+        try:
+            if file_path and os.path.exists(file_path):
+                wine_df = pd.read_csv(file_path, header=None, names=column_names)
+                print(f"Wczytano dane z {file_path} pomyślnie.")
+                st.info(f"Wczytano dane z: {file_path}")
+                return wine_df
+        except Exception as e:
+            print(f"Błąd podczas wczytywania z {file_path}: {e}")
+            continue
+
+    # Jeśli żaden plik nie został znaleziony, wypróbuj dane wbudowane
+    print("Nie znaleziono pliku z danymi. Sprawdzam dane wbudowane...")
+    return load_embedded_wine_data()
+
+
+def load_embedded_wine_data() -> pd.DataFrame:
+    """
+    Wczytuje przykładowe dane wine dataset jako fallback.
+    Używane gdy główny plik z danymi nie został znaleziony.
+
+    Returns:
+        DataFrame z przykładowymi danymi Wine Dataset (po 5 próbek z każdej klasy)
+    """
+    # Wyświetl komunikat o problemie
+    st.error("⚠️ **Problem z wczytywaniem głównego zbioru danych!**")
+    st.warning("""
+    **Nie udało się znaleźć pliku wine.data w standardowych lokalizacjach.**
+
+    **Możliwe przyczyny:**
+    - Plik nie został skopiowany podczas budowania aplikacji
+    - Nieprawidłowe ścieżki w konfiguracji Electron
+    - Brakujące uprawnienia dostępu do plików
+
+    **Używam przykładowych danych (15 próbek) do demonstracji funkcjonalności aplikacji.**
+    """)
+
+    # Nazwy kolumn
+    column_names = [
+        'Class', 'Alcohol', 'Malic acid', 'Ash', 'Alcalinity of ash', 'Magnesium',
+        'Total phenols', 'Flavanoids', 'Nonflavanoid phenols', 'Proanthocyanins',
+        'Color intensity', 'Hue', 'OD280/OD315 of diluted wines', 'Proline'
+    ]
+
+    # Przykładowe dane - po 5 próbek z każdej klasy
+    sample_data = [
+        # Klasa 1 (5 próbek)
+        [1, 14.23, 1.71, 2.43, 15.6, 127, 2.8, 3.06, 0.28, 2.29, 5.64, 1.04, 3.92, 1065],
+        [1, 13.20, 1.78, 2.14, 11.2, 100, 2.65, 2.76, 0.26, 1.28, 4.38, 1.05, 3.40, 1050],
+        [1, 13.16, 2.36, 2.67, 18.6, 101, 2.8, 3.24, 0.30, 2.81, 5.68, 1.03, 3.17, 1185],
+        [1, 14.37, 1.95, 2.50, 16.8, 113, 3.85, 3.49, 0.24, 2.18, 7.80, 0.86, 3.45, 1480],
+        [1, 13.24, 2.59, 2.87, 21.0, 118, 2.8, 2.69, 0.39, 1.82, 4.32, 1.04, 2.93, 735],
+
+        # Klasa 2 (5 próbek)
+        [2, 12.37, 0.94, 1.36, 10.6, 88, 1.98, 0.57, 0.28, 0.42, 1.95, 1.05, 1.82, 520],
+        [2, 12.33, 1.10, 2.28, 16.0, 101, 2.05, 1.09, 0.63, 0.41, 3.27, 1.25, 1.67, 680],
+        [2, 12.64, 1.36, 2.02, 16.8, 100, 2.02, 1.41, 0.53, 0.62, 5.75, 0.98, 1.59, 450],
+        [2, 13.67, 1.25, 1.92, 18.0, 94, 2.10, 1.79, 0.32, 0.73, 3.80, 1.23, 2.46, 630],
+        [2, 12.37, 1.13, 2.16, 19.0, 87, 3.50, 3.10, 0.19, 1.87, 4.45, 1.22, 2.87, 420],
+
+        # Klasa 3 (5 próbek)
+        [3, 12.86, 1.35, 2.32, 18.0, 122, 1.51, 1.25, 0.21, 0.94, 4.10, 0.76, 1.29, 630],
+        [3, 12.88, 2.99, 2.40, 20.0, 104, 1.30, 1.22, 0.24, 0.83, 5.40, 0.74, 1.42, 530],
+        [3, 12.81, 2.31, 2.40, 24.0, 98, 1.15, 1.09, 0.27, 0.83, 5.70, 0.66, 1.36, 560],
+        [3, 12.70, 3.55, 2.36, 21.5, 106, 1.70, 1.20, 0.17, 0.84, 5.00, 0.78, 1.29, 600],
+        [3, 12.51, 1.24, 2.25, 17.5, 85, 2.00, 0.58, 0.60, 1.25, 5.45, 0.75, 1.51, 650],
+    ]
+
+    # Stwórz DataFrame
+    df = pd.DataFrame(sample_data, columns=column_names)
+
+    st.info(f"✅ Załadowano {len(df)} przykładowych próbek (po 5 z każdej klasy) do demonstracji.")
+
+    return df
 
 
 def load_csv_file(uploaded_file, has_header: bool = True, class_column: str = None) -> Tuple[pd.DataFrame, str]:
