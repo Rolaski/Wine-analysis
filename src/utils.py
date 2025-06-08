@@ -442,7 +442,7 @@ def generate_model_parameter_description(model_type: str) -> Dict:
             }
         }
 
-    elif model_type == 'kmeans':
+    elif model_type == 'kmeans' or model_type == 'k-means':
         return {
             'n_clusters': {
                 'name': 'Liczba klastrów',
