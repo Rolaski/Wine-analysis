@@ -291,8 +291,13 @@ def page_ml_modeling():
             help="Wybierz algorytm klastrowania do zastosowania"
         )
 
-        # Mapowanie wyświetlanej nazwy na kod
-        model_code = model_type.lower()
+        # Mapowanie wyświetlanej nazwy na kod - poprawione dla klastrowania
+        if model_type == "K-Means":
+            model_code = "kmeans"  # Używamy 'kmeans' zamiast 'k-means' dla spójności
+        elif model_type == "DBSCAN":
+            model_code = "dbscan"
+        else:
+            model_code = model_type.lower()
 
         # Parametry modelu
         st.subheader("Parametry modelu")
@@ -389,56 +394,59 @@ def page_ml_modeling():
                     with st.spinner("Szukanie optymalnej liczby klastrów..."):
                         optimal_results = model.find_optimal_clusters(max_clusters)
 
-                        # Wykres metody łokcia (inertia)
-                        st.subheader("Metoda łokcia (inertia)")
+                        # Sprawdź czy wystąpił błąd
+                        if "error" in optimal_results:
+                            st.error(f"Błąd: {optimal_results['error']}")
+                        else:
+                            # Wykres metody łokcia (inertia)
+                            st.subheader("Metoda łokcia (inertia)")
 
-                        with st.expander("ℹ️ Jak interpretować metodę łokcia?"):
-                            st.markdown("""
-                            **Metoda łokcia** pomaga znaleźć optymalną liczbę klastrów poprzez wykres inercji
-                            (sumy kwadratów odległości punktów od ich centroidów) w zależności od liczby klastrów.
+                            with st.expander("ℹ️ Jak interpretować metodę łokcia?"):
+                                st.markdown("""
+                                **Metoda łokcia** pomaga znaleźć optymalną liczbę klastrów poprzez wykres inercji
+                                (sumy kwadratów odległości punktów od ich centroidów) w zależności od liczby klastrów.
 
-                            Szukamy "łokcia" na wykresie - punktu, w którym dodanie kolejnego klastra daje 
-                            znacznie mniejszy spadek inercji. Ten punkt sugeruje optymalną liczbę klastrów.
-                            """)
+                                Szukamy "łokcia" na wykresie - punktu, w którym dodanie kolejnego klastra daje 
+                                znacznie mniejszy spadek inercji. Ten punkt sugeruje optymalną liczbę klastrów.
+                                """)
 
-                        fig, ax = plt.subplots(figsize=(10, 6))
-                        ax.plot(optimal_results["k_values"], optimal_results["inertias"], 'o-')
-                        ax.set_xlabel('Liczba klastrów (k)')
-                        ax.set_ylabel('Inertia')
-                        ax.set_title('Metoda łokcia dla określenia optymalnej liczby klastrów')
-                        ax.grid(True)
-                        st.pyplot(fig)
+                            fig, ax = plt.subplots(figsize=(10, 6))
+                            ax.plot(optimal_results["k_values"], optimal_results["inertias"], 'o-')
+                            ax.set_xlabel('Liczba klastrów (k)')
+                            ax.set_ylabel('Inertia')
+                            ax.set_title('Metoda łokcia dla określenia optymalnej liczby klastrów')
+                            ax.grid(True)
+                            st.pyplot(fig)
 
-                        # Wykres współczynnika silhouette
-                        st.subheader("Współczynnik silhouette")
+                            # Wykres współczynnika silhouette
+                            st.subheader("Współczynnik silhouette")
 
-                        with st.expander("ℹ️ Jak interpretować współczynnik silhouette?"):
-                            st.markdown("""
-                            **Współczynnik silhouette** mierzy, jak podobny jest obiekt do własnego klastra
-                            w porównaniu do innych klastrów. Wartości wahają się od -1 do 1:
+                            with st.expander("ℹ️ Jak interpretować współczynnik silhouette?"):
+                                st.markdown("""
+                                **Współczynnik silhouette** mierzy, jak podobny jest obiekt do własnego klastra
+                                w porównaniu do innych klastrów. Wartości wahają się od -1 do 1:
 
-                            - **Wartości bliskie 1**: Obiekt jest dobrze przypisany do swojego klastra
-                            - **Wartości bliskie 0**: Obiekt jest na granicy między klastrami
-                            - **Wartości bliskie -1**: Obiekt prawdopodobnie jest w złym klastrze
+                                - **Wartości bliskie 1**: Obiekt jest dobrze przypisany do swojego klastra
+                                - **Wartości bliskie 0**: Obiekt jest na granicy między klastrami
+                                - **Wartości bliskie -1**: Obiekt prawdopodobnie jest w złym klastrze
 
-                            Wyższe wartości średnie wskazują lepszą konfigurację klastrów.
-                            """)
+                                Wyższe wartości średnie wskazują lepszą konfigurację klastrów.
+                                """)
 
-                        fig, ax = plt.subplots(figsize=(10, 6))
-                        ax.plot(optimal_results["k_values"], optimal_results["silhouettes"], 'o-')
-                        ax.set_xlabel('Liczba klastrów (k)')
-                        ax.set_ylabel('Współczynnik silhouette')
-                        ax.set_title('Współczynnik silhouette dla określenia optymalnej liczby klastrów')
-                        ax.grid(True)
-                        st.pyplot(fig)
+                            fig, ax = plt.subplots(figsize=(10, 6))
+                            ax.plot(optimal_results["k_values"], optimal_results["silhouettes"], 'o-')
+                            ax.set_xlabel('Liczba klastrów (k)')
+                            ax.set_ylabel('Współczynnik silhouette')
+                            ax.set_title('Współczynnik silhouette dla określenia optymalnej liczby klastrów')
+                            ax.grid(True)
+                            st.pyplot(fig)
 
-                        # Informacja o optymalnej liczbie klastrów
-                        st.info(
-                            f"Optymalna liczba klastrów na podstawie współczynnika silhouette: {optimal_results['optimal_k']}")
+                            # Informacja o optymalnej liczbie klastrów
+                            st.info(
+                                f"Optymalna liczba klastrów na podstawie współczynnika silhouette: {optimal_results['optimal_k']}")
 
-                        # Aktualizacja liczby klastrów
-                        params['n_clusters'] = optimal_results['optimal_k']
-
+                            # Aktualizacja liczby klastrów
+                            params['n_clusters'] = optimal_results['optimal_k']
                 # Trening modelu
                 results = model.train(params)
 
